@@ -1,0 +1,10 @@
+{
+  "name": "bap.localisation",
+  "version": "1.0.0",
+  "displayName": "BAP Localisation",
+  "description": "Localisation tools for BAP.",
+  "author": {
+    "name": "BAP",
+    "url": "https://github.com/BAPHQ/bap.localisation"
+  }
+}
