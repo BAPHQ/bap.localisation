@@ -1,7 +1,9 @@
 {
     "name": "BAP.Localisation",
     "rootNamespace": "BAP.Localisation",
-    "references": [],
+    "references": [
+        "Unity.TextMeshPro"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
