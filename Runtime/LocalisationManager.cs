@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace BAP.Localisation 
+namespace BAP.Localisation
 {
     public class LocalisationManager : MonoBehaviour
     {
@@ -31,13 +31,17 @@ namespace BAP.Localisation
         [SerializeField] private DebugConfig _debug;
         [SerializeField] private Translator.Configuration _translation;
 
+        private static LocalisationManager _instance;
         private readonly Dictionary<int, ILocalised> _listenerLookup = new();
         private readonly List<Translator> _loadedLocalisations = new();
         private Translator _defaultTranslator;
         private Translator _currentTranslator;
         public event Action<Translator> OnLanguageChanged;
-        
-        public static LocalisationManager Instance { get ; private set; }
+
+        public static LocalisationManager Instance
+        {
+            get => _instance;
+        }
 
         public Translator CurrentTranslator
         {
@@ -122,7 +126,7 @@ namespace BAP.Localisation
                         _currentTranslator = _defaultTranslator;
                         return;
                     }
-                    
+
                     var loadedIndex = languageIndexPref - 1;
                     if (loadedIndex < _loadedLocalisations.Count)
                     {
@@ -133,7 +137,7 @@ namespace BAP.Localisation
             }
 
             var languagePref = PlayerPrefs.GetString("Settings_Language");
-            if (languagePref != string.Empty && 
+            if (languagePref != string.Empty &&
                 Enum.TryParse<SystemLanguage>(languagePref, out var l))
             {
                 var t = _loadedLocalisations.FirstOrDefault(x => x.Language == l);
@@ -147,7 +151,7 @@ namespace BAP.Localisation
             // If the system language is not the default language and is present in lookup then use that language
             var systemLanguage = Application.systemLanguage;
             var systemCulture = System.Globalization.CultureInfo.CurrentCulture.Name;
-            
+
             // Hack to map Chinese => ChineseSimplified
             if (systemLanguage == SystemLanguage.Chinese)
             {
@@ -157,8 +161,9 @@ namespace BAP.Localisation
             if (systemLanguage != _currentTranslator.Language || !string.IsNullOrEmpty(_currentTranslator.CultureCode))
             {
                 // Try to find an exact match for both language and culture
-                var translator = _loadedLocalisations.FirstOrDefault(x => x.Language == systemLanguage && x.CultureCode == systemCulture);
-                
+                var translator = _loadedLocalisations.FirstOrDefault(x =>
+                    x.Language == systemLanguage && x.CultureCode == systemCulture);
+
                 // If no exact match, try matching just the language (preferring one without a specific culture code or the first one found)
                 if (translator == null)
                 {
@@ -170,14 +175,14 @@ namespace BAP.Localisation
                     _currentTranslator = translator;
                 }
             }
-            
+
             // Save the index for next time if it changed or wasn't set
             if (languageIndexPref == -1)
             {
                 PlayerPrefs.SetInt("Settings_Language_Index", CurrentLanguageIndex);
             }
 
-            Instance = this;
+            _instance = this;
         }
 
         /// <summary>
@@ -187,9 +192,9 @@ namespace BAP.Localisation
         public void Register(ILocalised listener)
         {
             if (listener == null) return;
-            
+
             var hash = listener.GetHashCode();
-            
+
             if (!_listenerLookup.TryAdd(hash, listener)) return;
 
             if (_currentTranslator != null)
@@ -204,12 +209,12 @@ namespace BAP.Localisation
         public void Deregister(ILocalised listener)
         {
             if (listener == null) return;
-            
+
             var hash = listener.GetHashCode();
 
             _listenerLookup.Remove(hash);
         }
-        
+
         /// <summary>
         /// Set the current language by system language, cache and notify any listeners
         /// </summary>
@@ -240,13 +245,16 @@ namespace BAP.Localisation
                 if (language == SystemLanguage.Portuguese)
                 {
                     var systemCulture = System.Globalization.CultureInfo.CurrentCulture.Name;
-                    _currentTranslator = _loadedLocalisations.FirstOrDefault(x => x.Language == language && x.CultureCode == systemCulture) 
-                                         ?? _loadedLocalisations.FirstOrDefault(x => x.Language == language) 
-                                         ?? _defaultTranslator;
+                    _currentTranslator =
+                        _loadedLocalisations.FirstOrDefault(x =>
+                            x.Language == language && x.CultureCode == systemCulture)
+                        ?? _loadedLocalisations.FirstOrDefault(x => x.Language == language)
+                        ?? _defaultTranslator;
                 }
                 else
                 {
-                    _currentTranslator = _loadedLocalisations.FirstOrDefault(x => x.Language == language) ?? _defaultTranslator;
+                    _currentTranslator = _loadedLocalisations.FirstOrDefault(x => x.Language == language) ??
+                                         _defaultTranslator;
                 }
             }
 
@@ -330,7 +338,7 @@ namespace BAP.Localisation
             OnLanguageChanged?.Invoke(_currentTranslator);
 
             List<int> remove = null;
-            
+
             foreach (var kvp in _listenerLookup)
             {
                 if (kvp.Value == null)
@@ -339,10 +347,10 @@ namespace BAP.Localisation
                     remove.Add(kvp.Key);
                     continue;
                 }
-                
+
                 kvp.Value.Localise(_currentTranslator);
             }
-            
+
             if (remove != null)
             {
                 foreach (var key in remove)
