@@ -7,8 +7,7 @@ using Object = UnityEngine.Object;
 namespace BAP.Localisation
 {
     /// <summary>
-    /// Localisation context for a single language
-    /// obtains translations for provided phrase keys
+    /// Localisation context for a single language gets translations for provided phrase keys.
     /// </summary>
     public class Translator
     {
