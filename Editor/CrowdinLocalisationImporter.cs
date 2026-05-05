@@ -261,7 +261,23 @@ namespace BAP.Localisation.Editor
 
         private static void WriteLines(string path, List<string> lines)
         {
-            File.WriteAllText(path, string.Join("\n", lines), new UTF8Encoding(false));
+            var sanitizedLines = new List<string>(lines.Count);
+            foreach (var line in lines)
+            {
+                sanitizedLines.Add(EscapeNewlines(line));
+            }
+
+            File.WriteAllText(path, string.Join("\n", sanitizedLines), new UTF8Encoding(false));
+        }
+
+        private static string EscapeNewlines(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Replace("\r\n", "\\r\\n").Replace("\n", "\\n").Replace("\r", "\\r");
         }
 
         private static string EnsureJsonExtension(string fileName)

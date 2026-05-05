@@ -7,29 +7,23 @@ namespace BAP.Localisation
 {
     public class LocalisationManager : MonoBehaviour
     {
-        [Serializable]
-        public class Localisation
-        {
-            public SystemLanguage Language;
-            public string CultureCode;
-            public string LanguageName;
-            public Sprite LanguageIcon;
-            public TextAsset PhraseData;
-        }
+        private const string DEFAULT_LANGUAGE_INDEX_PREF_KEY = "Settings_Language_Index";
+        private const string DEFAULT_LANGUAGE_PREF_KEY = "Settings_Language";
 
-        [Serializable]
-        public class DebugConfig
-        {
-            public bool OverrideSystemLanguage;
-            public SystemLanguage LanguageOverride;
-            public bool OutputLocalisation;
-        }
+        [SerializeField] private LocalisationConfig _localisationConfig;
+        
+        [Header("Debug")]
+        [SerializeField] private bool _overrideSystemLanguage;
+        [SerializeField] private SystemLanguage _languageOverride;
 
-        [SerializeField] private TextAsset _keyData;
-        [SerializeField] private Localisation _defaultLocalisation;
-        [SerializeField] private Localisation[] _localisations;
-        [SerializeField] private DebugConfig _debug;
-        [SerializeField] private Translator.Configuration _translation;
+        [Header("Translation")]
+        [SerializeField] private bool _keyForceUppercase;
+        [SerializeField] private string _keyFailureString;
+        [SerializeField] private string _ignoreTranslationString;
+
+        [Header("Persistence")]
+        [SerializeField] private string _languageIndexPlayerPrefsKey = DEFAULT_LANGUAGE_INDEX_PREF_KEY;
+        [SerializeField] private string _languagePlayerPrefsKey = DEFAULT_LANGUAGE_PREF_KEY;
 
         private static LocalisationManager _instance;
         private readonly Dictionary<int, ILocalised> _listenerLookup = new();
@@ -59,12 +53,26 @@ namespace BAP.Localisation
             }
         }
 
-        public List<Localisation> Localisations
+        public List<LocalisationConfig.Localisation> Localisations
         {
             get
             {
-                var localisations = new List<Localisation> { _defaultLocalisation };
-                localisations.AddRange(_localisations);
+                if (_localisationConfig == null)
+                {
+                    return new List<LocalisationConfig.Localisation>();
+                }
+
+                var localisations = new List<LocalisationConfig.Localisation>();
+                if (_localisationConfig.DefaultLocalisation != null)
+                {
+                    localisations.Add(_localisationConfig.DefaultLocalisation);
+                }
+
+                if (_localisationConfig.Localisations != null)
+                {
+                    localisations.AddRange(_localisationConfig.Localisations);
+                }
+
                 return localisations;
             }
         }
@@ -73,10 +81,32 @@ namespace BAP.Localisation
         {
             Debug.Log("[LocalisationManager] Initialise");
 
+            if (_localisationConfig == null || _localisationConfig.DefaultLocalisation == null)
+            {
+                Debug.LogError("[Localisation] LocalisationConfig is missing or DefaultLocalisation is not configured.");
+                return;
+            }
+
+            _loadedLocalisations.Clear();
+
+            string[] keys;
+            try
+            {
+                keys = LoadKeys();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[Localisation] Failed to load keys file.");
+                Debug.LogException(e);
+                return;
+            }
+
+            var defaultLocalisation = _localisationConfig.DefaultLocalisation;
+
             // Load the default configuration
             try
             {
-                _defaultTranslator = LoadFromConfig(_defaultLocalisation);
+                _defaultTranslator = LoadFromConfig(defaultLocalisation, keys);
                 _currentTranslator = _defaultTranslator;
             }
             catch (Exception e)
@@ -86,19 +116,16 @@ namespace BAP.Localisation
                 return;
             }
 
-            var output = _debug.OutputLocalisation ? "<b>Localisations</b>\n\n" : "";
-
             // Load localisations
-            for (var i = 0; i < _localisations.Length; i++)
+            var localisations = _localisationConfig.Localisations ?? Array.Empty<LocalisationConfig.Localisation>();
+            for (var i = 0; i < localisations.Length; i++)
             {
-                var configuration = _localisations[i];
+                var configuration = localisations[i];
                 var language = configuration.Language;
 
                 try
                 {
-                    var localisation = LoadFromConfig(configuration);
-
-                    if (_debug.OutputLocalisation) output += $"{localisation}\n";
+                    var localisation = LoadFromConfig(configuration, keys);
 
                     _loadedLocalisations.Add(localisation);
                 }
@@ -109,13 +136,11 @@ namespace BAP.Localisation
                 }
             }
 
-            if (_debug.OutputLocalisation && !string.IsNullOrEmpty(output))
-            {
-                Debug.Log(output);
-            }
+            // Emit a compact summary of the language set that was loaded.
+            LogInitialisedLanguages();
 
             // If the language has been manually set then try to load that localisation
-            var languageIndexPref = PlayerPrefs.GetInt("Settings_Language_Index", -1);
+            var languageIndexPref = PlayerPrefs.GetInt(LanguageIndexPlayerPrefsKey, -1);
             if (languageIndexPref >= 0)
             {
                 var allLocalisations = Localisations;
@@ -136,7 +161,7 @@ namespace BAP.Localisation
                 }
             }
 
-            var languagePref = PlayerPrefs.GetString("Settings_Language");
+            var languagePref = PlayerPrefs.GetString(LanguagePlayerPrefsKey);
             if (languagePref != string.Empty &&
                 Enum.TryParse<SystemLanguage>(languagePref, out var l))
             {
@@ -179,10 +204,27 @@ namespace BAP.Localisation
             // Save the index for next time if it changed or wasn't set
             if (languageIndexPref == -1)
             {
-                PlayerPrefs.SetInt("Settings_Language_Index", CurrentLanguageIndex);
+                PlayerPrefs.SetInt(LanguageIndexPlayerPrefsKey, CurrentLanguageIndex);
             }
 
             _instance = this;
+        }
+
+        private void LogInitialisedLanguages()
+        {
+            var languages = new List<string>();
+
+            if (_defaultTranslator != null)
+            {
+                languages.Add($"{_defaultTranslator.Language}(default)");
+            }
+
+            foreach (var localisation in _loadedLocalisations)
+            {
+                languages.Add(localisation.Language.ToString());
+            }
+
+            Debug.Log($"[LocalisationManager] Initialised languages ({languages.Count}): {string.Join(", ", languages)}");
         }
 
         /// <summary>
@@ -259,10 +301,20 @@ namespace BAP.Localisation
             }
 
             index = CurrentLanguageIndex;
-            PlayerPrefs.SetInt("Settings_Language_Index", index);
-            PlayerPrefs.SetString("Settings_Language", _currentTranslator.Language.ToString());
+            PlayerPrefs.SetInt(LanguageIndexPlayerPrefsKey, index);
+            PlayerPrefs.SetString(LanguagePlayerPrefsKey, _currentTranslator.Language.ToString());
             NotifyLanguageChanged();
         }
+
+        private string LanguageIndexPlayerPrefsKey =>
+            string.IsNullOrWhiteSpace(_languageIndexPlayerPrefsKey)
+                ? DEFAULT_LANGUAGE_INDEX_PREF_KEY
+                : _languageIndexPlayerPrefsKey;
+
+        private string LanguagePlayerPrefsKey =>
+            string.IsNullOrWhiteSpace(_languagePlayerPrefsKey)
+                ? DEFAULT_LANGUAGE_PREF_KEY
+                : _languagePlayerPrefsKey;
 
         /// <summary>
         /// The default localisation context, this will fall back to empty
@@ -271,7 +323,8 @@ namespace BAP.Localisation
         public Translator DefaultTranslator
         {
             get => _defaultTranslator ?? new Translator(
-                _translation, SystemLanguage.English, new Dictionary<string, string>());
+                _keyForceUppercase, _keyFailureString, _ignoreTranslationString,
+                SystemLanguage.English, new Dictionary<string, string>());
         }
 
         /// <summary>
@@ -283,12 +336,12 @@ namespace BAP.Localisation
             return _loadedLocalisations.FirstOrDefault(x => x.Language == language) ?? DefaultTranslator;
         }
 
-        private Translator LoadFromConfig(Localisation configuration)
+        private Translator LoadFromConfig(LocalisationConfig.Localisation configuration, string[] keys)
         {
             // Obtain the keys/phrases from the data files
             var language = configuration.Language;
-            var phrases = configuration.PhraseData.text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            var keys = _keyData.text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            var phraseText = LoadResourceText(configuration.FileName);
+            var phrases = SplitResourceLines(phraseText);
 
             // Create a lookup for phrases
             var dictionary = new Dictionary<string, string>();
@@ -297,14 +350,14 @@ namespace BAP.Localisation
             // there's an issue with the import and nothing is safe
             if (keys.Length != phrases.Length)
             {
-                throw new Exception("[Localisation] key phrase length mismatch");
+                throw new Exception($"[Localisation] key phrase length mismatch for '{configuration.FileName}'. Keys: {keys.Length}, Phrases: {phrases.Length}");
             }
 
             // Iterate over the keys/phrases and populate the dictionary
             for (var i = 0; i < keys.Length; i++)
             {
                 var key = keys[i];
-                var phrase = phrases[i];
+                var phrase = RestoreEscapedNewlines(phrases[i]);
 
                 if (string.IsNullOrEmpty(key))
                 {
@@ -329,7 +382,84 @@ namespace BAP.Localisation
                 dictionary.Add(key, phrase);
             }
 
-            return new Translator(_translation, language, dictionary, configuration.CultureCode);
+            return new Translator(
+                _keyForceUppercase,
+                _keyFailureString,
+                _ignoreTranslationString,
+                language,
+                dictionary,
+                configuration.CultureCode);
+        }
+
+        private string[] LoadKeys()
+        {
+            var keysText = LoadResourceText(_localisationConfig.KeysFileName);
+            return SplitResourceLines(keysText);
+        }
+
+        private static string[] SplitResourceLines(string text)
+        {
+            var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            if (lines.Length > 0 && string.IsNullOrEmpty(lines[^1]))
+            {
+                Array.Resize(ref lines, lines.Length - 1);
+            }
+
+            return lines;
+        }
+
+        private static string RestoreEscapedNewlines(string phrase)
+        {
+            if (string.IsNullOrEmpty(phrase))
+            {
+                return phrase;
+            }
+
+            return phrase.Replace("\\r\\n", "\r\n").Replace("\\n", "\n").Replace("\\r", "\r");
+        }
+
+        private string LoadResourceText(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                throw new Exception("[Localisation] Resource file name is missing.");
+            }
+
+            // Build a Resources.Load-compatible path from root + file name.
+            var resourcesRootPath = NormalizeResourcePathSegment(_localisationConfig.ResourcesRootPath);
+            var normalizedFileName = NormalizeResourcePathSegment(NormalizeResourceFileName(fileName));
+            var resourcePath = string.IsNullOrEmpty(resourcesRootPath)
+                ? normalizedFileName
+                : $"{resourcesRootPath}/{normalizedFileName}";
+
+            var textAsset = Resources.Load<TextAsset>(resourcePath);
+            if (textAsset == null)
+            {
+                throw new Exception($"[Localisation] Resource file '{resourcePath}' was not found.");
+            }
+
+            return textAsset.text;
+        }
+
+        private static string NormalizeResourceFileName(string fileName)
+        {
+            var normalized = fileName.Trim().Replace('\\', '/');
+            var extension = System.IO.Path.GetExtension(normalized);
+
+            return string.IsNullOrWhiteSpace(extension)
+                ? normalized
+                : normalized.Substring(0, normalized.Length - extension.Length);
+        }
+
+        private static string NormalizeResourcePathSegment(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            return path.Trim().Replace('\\', '/').Trim('/');
         }
 
         // Safe notification of language change, emit event and notify listeners

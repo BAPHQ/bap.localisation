@@ -11,27 +11,25 @@ namespace BAP.Localisation
     /// </summary>
     public class Translator
     {
-        [Serializable]
-        public class Configuration
-        {
-            public bool KeyForceUppercase;
-            public string KeyFailureString;
-            public string IgnoreTranslationString;
-        }
-
-        private readonly Configuration _configuration;
+        private readonly bool _keyForceUppercase;
+        private readonly string _keyFailureString;
+        private readonly string _ignoreTranslationString;
         private readonly SystemLanguage _language;
         private readonly string _cultureCode;
         private readonly Dictionary<string, string> _phraseLookup;
         private readonly CultureInfo _cultureInfo;
 
         public Translator(
-            Configuration configuration,
+            bool keyForceUppercase,
+            string keyFailureString,
+            string ignoreTranslationString,
             SystemLanguage language,
             Dictionary<string, string> phraseLookup,
             string cultureCode = null)
         {
-            _configuration = configuration;
+            _keyForceUppercase = keyForceUppercase;
+            _keyFailureString = keyFailureString;
+            _ignoreTranslationString = ignoreTranslationString;
             _language = language;
             _phraseLookup = phraseLookup;
             _cultureCode = cultureCode;
@@ -68,11 +66,11 @@ namespace BAP.Localisation
                 return key;
 
             // If this key starts with the ignoring translation string, trim it and return it
-            if (key.StartsWith(_configuration.IgnoreTranslationString))
-                return key[_configuration.IgnoreTranslationString.Length..];
+            if (!string.IsNullOrEmpty(_ignoreTranslationString) && key.StartsWith(_ignoreTranslationString))
+                return key[_ignoreTranslationString.Length..];
 
             // Force key to uppercase if configured
-            key = _configuration.KeyForceUppercase ? key.ToUpperInvariant() : key;
+            key = _keyForceUppercase ? key.ToUpperInvariant() : key;
 
             // Get a translation from the lookup
             if (_phraseLookup.TryGetValue(key, out var phrase)) return phrase;
@@ -81,7 +79,7 @@ namespace BAP.Localisation
             Debug.LogWarning(warning, context);
 
             // Suppress exception returns failure string or key if empty
-            var failure = _configuration.KeyFailureString;
+            var failure = _keyFailureString;
 
             return !string.IsNullOrEmpty(failure) ? failure : key;
         }
