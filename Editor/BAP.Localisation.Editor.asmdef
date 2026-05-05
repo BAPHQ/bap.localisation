@@ -1,6 +1,6 @@
 {
   "name": "BAP.Localisation.Editor",
-  "rootNamespace": "",
+  "rootNamespace": "BAP.Localisation.Editor",
   "references": [
     "BAP.Localisation"
   ],

@@ -3,16 +3,16 @@ using UnityEngine;
 
 namespace BAP.Localisation.Editor
 {
-    [CustomEditor(typeof(CrowdinImporterConfig))]
-    public class CrowdinImporterConfigEditor : UnityEditor.Editor
+    [CustomEditor(typeof(CrowdinImportConfig))]
+    public class CrowdinImportConfigEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
 
-            var config = (CrowdinImporterConfig)target;
+            var config = (CrowdinImportConfig)target;
 
-            if (GUILayout.Button("Import From Crowdin"))
+            if (GUILayout.Button("Import"))
             {
                 CrowdinLocalisationImporter.Import(config);
             }
