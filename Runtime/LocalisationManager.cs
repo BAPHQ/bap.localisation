@@ -79,6 +79,9 @@ namespace BAP.Localisation
 
         public void Initialise()
         {
+            // Expose instance immediately so dependent components can safely access it during init.
+            _instance = this;
+
             Debug.Log("[LocalisationManager] Initialise");
 
             if (_localisationConfig == null || _localisationConfig.DefaultLocalisation == null)
@@ -207,7 +210,6 @@ namespace BAP.Localisation
                 PlayerPrefs.SetInt(LanguageIndexPlayerPrefsKey, CurrentLanguageIndex);
             }
 
-            _instance = this;
         }
 
         private void LogInitialisedLanguages()
